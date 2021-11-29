@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>测试报告</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 16px;
+	min-width: 1200px;
+	color: black;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 18px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: black;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid black;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid black;
+	color: black;
+	font-size: 16px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid black;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid black;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (展开详情)";
+	color: black;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (隐藏详情)";
+	color: black;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid black;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid black;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid black;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = key_result;
+    } else if (elem.classList.contains('links')) {
+        key = key_link;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() { // eslint-disable-line no-unused-vars
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() { // eslint-disable-line no-unused-vars
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    const extras = colresult_elem.parentNode.nextElementSibling;
+    const expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hide_extras(colresult_elem) {
+    const extras = colresult_elem.parentNode.nextElementSibling;
+    const expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function show_filters() {
+    const filter_items = document.getElementsByClassName('filter');
+    for (let i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">显示详情</a> / ' +
+                            '<a href="javascript:hide_all_extras()">隐藏详情</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        const collapsed = get_query_parameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function get_query_parameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    sort_column(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sort_column(elem);
+            }, false);
+    });
+}
+
+function sort_table(clicked, key_func) {
+    const rows = find_all('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    const sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+
+    sort_array.sort(function(a, b) {
+        const key_a = a[0];
+        const key_b = b[0];
+
+        if (key_a == key_b) return 0;
+
+        if (reversed) {
+            return key_a < key_b ? 1 : -1;
+        } else {
+            return key_a > key_b ? 1 : -1;
+        }
+    });
+
+    return sort_array.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_link(col_index) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[col_index].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+    return value.hidden == false;
+}
+
+function filter_table(elem) { // eslint-disable-line no-unused-vars
+    const outcome_att = 'data-test-result';
+    const outcome = elem.getAttribute(outcome_att);
+    const class_outcome = outcome + ' results-table-row';
+    const outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(let i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    const rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    const all_rows_hidden = rows.length == 0 ? true : false;
+    const not_found_message = document.getElementById('not-found-message');
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>自定义接口测试报告名称</h1>
+    <p>生成报告时间：2021-08-29 17:51:22</p>
+    <h2>测试环境</h2>
+    <table id="environment">
+      <tr>
+        <td>Python版本</td>
+        <td>3.9.4</td></tr>
+      <tr>
+        <td>包</td>
+        <td>Requests(2.25.1)，PyMySQL(1.0.2)，Pandas(1.2.4)，Pytest(6.2.4)，Pytest-html(3.1.1)</td></tr>
+      <tr>
+        <td>平台</td>
+        <td>Windows-10-10.0.19041-SP0</td></tr>
+      <tr>
+        <td>项目名称</td>
+        <td>自定义项目名称</td></tr></table>
+    <h2>用例统计</h2>
+    <p>执行了14个测试，耗时1.22秒</p>
+    <p class="filter" hidden="true">(取消)勾选复选框, 以便筛选测试结果</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">11 通过</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 跳过</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">3 失败</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 错误</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 预期失败</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 预期通过</span>
+    <h2>测试结果</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">通过/失败</th>
+          <th>测试描述</th>
+          <th class="sortable" col="name">测试用例</th>
+          <th class="sortable" col="duration">持续时间</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">无测试结果, 试着选择其他测试结果条件</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td>login_03:测试密码错误</td>
+          <td class="col-name">testcase/test_login.py::test_login[login_03-测试密码错误-/exam/login/-post-args2-用户名或密码错误]</td>
+          <td class="col-duration">0.03</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">..\testcase\test_login.py:28: in test_login<br/>    assert res, msg<br/><span class="error">E   AssertionError: login_03:测试密码错误==比对响应结果失败==预期：用户名或密码错误==实际：&lt;b&gt;密码错误&lt;/b&gt;</span><br/><span class="error">E   assert False</span><br/> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:21 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:21 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:21 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:21 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:21 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:21 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:21 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:21 [INFO] 读sql语句文件(&#x27;login.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:21 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:21 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test03&#x27;, &#x27;password&#x27;: 123}发送给接口地址http://192.168.1.133:80/exam/login/成功 [send.py:19]
+2021-08-29 17:51:21 [WARNING] login_03:测试密码错误==比对响应结果失败==预期：用户名或密码错误==实际：&lt;b&gt;密码错误&lt;/b&gt; [send.py:41]<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td>signup_03:测试两次密码不一致</td>
+          <td class="col-name">testcase/test_signup.py::test_signup[signup_03-测试两次密码不一致-/exam/signup/-post-args2-expect2-select count(*) from user where username=&apos;test08&apos; and password=&apos;123456&apos; and name=&apos;测试08&apos;-0]</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">C:\Users\86136\AppData\Local\Programs\Python\Python39\lib\site-packages\six.py:718: in reraise<br/>    raise value.with_traceback(tb)<br/><span class="error">E   pytest_assume.plugin.FailedAssumption: </span><br/><span class="error">E   1 Failed Assumptions:</span><br/><span class="error">E   </span><br/><span class="error">E   ..\testcase\test_signup.py:26: AssumptionFailure</span><br/><span class="error">E   &gt;&gt;	pytest.assume(res, msg)</span><br/><span class="error">E   AssertionError: signup_03:测试两次密码不一致==比对响应结果失败==预期：{&#x27;Status&#x27;: 1002, &#x27;Result&#x27;: &#x27;Password Not Compare&#x27;, &#x27;Message&#x27;: &#x27;两次输入的密码不一致&#x27;}==实际：{&#x27;Status&#x27;: 1002, &#x27;Result&#x27;: &#x27;Password Not Compare&#x27;, &#x27;Message&#x27;: &#x27;密码错误&#x27;}</span><br/><span class="error">E   assert False</span><br/> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;signup.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test08&#x27;, &#x27;password&#x27;: 123456, &#x27;confirm&#x27;: 1234, &#x27;name&#x27;: &#x27;测试08&#x27;}发送给接口地址http://192.168.1.133:80/exam/signup/成功 [send.py:19]
+2021-08-29 17:51:22 [WARNING] signup_03:测试两次密码不一致==比对响应结果失败==预期：{&#x27;Status&#x27;: 1002, &#x27;Result&#x27;: &#x27;Password Not Compare&#x27;, &#x27;Message&#x27;: &#x27;两次输入的密码不一致&#x27;}==实际：{&#x27;Status&#x27;: 1002, &#x27;Result&#x27;: &#x27;Password Not Compare&#x27;, &#x27;Message&#x27;: &#x27;密码错误&#x27;} [send.py:41]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] signup_03:测试两次密码不一致==落库检查通过 [db.py:48]<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td>signup_06:测试确认密码为空</td>
+          <td class="col-name">testcase/test_signup.py::test_signup[signup_06-测试确认密码为空-/exam/signup/-post-args5-expect5-select count(*) from user where username=&apos;test10&apos; and password=&apos;123456&apos; and name=&apos;测试10&apos;-0]</td>
+          <td class="col-duration">0.04</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">..\testcase\test_signup.py:28: in test_signup<br/>    assert res, msg<br/><span class="error">E   AssertionError: signup_06:测试确认密码为空==落库检查失败==检查的数据：{&#x27;username&#x27;: &#x27;test10&#x27;, &#x27;password&#x27;: 123456, &#x27;confirm&#x27;: &#x27;&#x27;, &#x27;name&#x27;: &#x27;测试10&#x27;}==预期行数：0==实际行数：1</span><br/><span class="error">E   assert False</span><br/> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;signup.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test10&#x27;, &#x27;password&#x27;: 123456, &#x27;confirm&#x27;: &#x27;&#x27;, &#x27;name&#x27;: &#x27;测试10&#x27;}发送给接口地址http://192.168.1.133:80/exam/signup/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] signup_06:测试确认密码为空==比对响应结果通过 [send.py:38]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [WARNING] signup_06:测试确认密码为空==落库检查失败==检查的数据：{&#x27;username&#x27;: &#x27;test10&#x27;, &#x27;password&#x27;: 123456, &#x27;confirm&#x27;: &#x27;&#x27;, &#x27;name&#x27;: &#x27;测试10&#x27;}==预期行数：0==实际行数：1 [db.py:52]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>login_01:测试登录成功</td>
+          <td class="col-name">testcase/test_login.py::test_login[login_01-测试登录成功-/exam/login/-post-args0-登录成功]</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:21 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:21 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:21 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:21 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:21 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:21 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:21 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:21 [INFO] 读sql语句文件(&#x27;login.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:21 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:21 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test01&#x27;, &#x27;password&#x27;: 123456}发送给接口地址http://192.168.1.133:80/exam/login/成功 [send.py:19]
+2021-08-29 17:51:21 [INFO] login_01:测试登录成功==比对响应结果通过 [send.py:38]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>login_02:测试用户名错误</td>
+          <td class="col-name">testcase/test_login.py::test_login[login_02-测试用户名错误-/exam/login/-post-args1-用户名或密码错误]</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:21 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:21 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:21 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:21 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:21 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:21 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:21 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:21 [INFO] 读sql语句文件(&#x27;login.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:21 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:21 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test02&#x27;, &#x27;password&#x27;: 123456}发送给接口地址http://192.168.1.133:80/exam/login/成功 [send.py:19]
+2021-08-29 17:51:21 [INFO] login_02:测试用户名错误==比对响应结果通过 [send.py:38]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>login_04:测试用户名和密码均错误</td>
+          <td class="col-name">testcase/test_login.py::test_login[login_04-测试用户名和密码均错误-/exam/login/-post-args3-用户名或密码错误]</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;login.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test04&#x27;, &#x27;password&#x27;: 123}发送给接口地址http://192.168.1.133:80/exam/login/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] login_04:测试用户名和密码均错误==比对响应结果通过 [send.py:38]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>login_05:测试用户名为空</td>
+          <td class="col-name">testcase/test_login.py::test_login[login_05-测试用户名为空-/exam/login/-post-args4-用户名或密码为空]</td>
+          <td class="col-duration">0.03</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;login.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;&#x27;, &#x27;password&#x27;: 123456}发送给接口地址http://192.168.1.133:80/exam/login/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] login_05:测试用户名为空==比对响应结果通过 [send.py:38]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>login_06:测试密码为空</td>
+          <td class="col-name">testcase/test_login.py::test_login[login_06-测试密码为空-/exam/login/-post-args5-用户名或密码为空]</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;login.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test05&#x27;, &#x27;password&#x27;: &#x27;&#x27;}发送给接口地址http://192.168.1.133:80/exam/login/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] login_06:测试密码为空==比对响应结果通过 [send.py:38]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>login_07:测试用户名和密码均空</td>
+          <td class="col-name">testcase/test_login.py::test_login[login_07-测试用户名和密码均空-/exam/login/-post-args6-用户名或密码为空]</td>
+          <td class="col-duration">0.03</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;login.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;&#x27;, &#x27;password&#x27;: &#x27;&#x27;}发送给接口地址http://192.168.1.133:80/exam/login/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] login_07:测试用户名和密码均空==比对响应结果通过 [send.py:38]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>signup_01:测试注册成功</td>
+          <td class="col-name">testcase/test_signup.py::test_signup[signup_01-测试注册成功-/exam/signup/-post-args0-expect0-select count(*) from user where username=&apos;test06&apos; and password=&apos;123456&apos; and name=&apos;测试06&apos;-1]</td>
+          <td class="col-duration">0.05</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;signup.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test06&#x27;, &#x27;password&#x27;: 123456, &#x27;confirm&#x27;: 123456, &#x27;name&#x27;: &#x27;测试06&#x27;}发送给接口地址http://192.168.1.133:80/exam/signup/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] signup_01:测试注册成功==比对响应结果通过 [send.py:38]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] signup_01:测试注册成功==落库检查通过 [db.py:48]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>signup_02:测试重复注册</td>
+          <td class="col-name">testcase/test_signup.py::test_signup[signup_02-测试重复注册-/exam/signup/-post-args1-expect1-select count(*) from user where username=&apos;test07&apos; and password=&apos;123456&apos; and name=&apos;测试07&apos;-1]</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;signup.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test07&#x27;, &#x27;password&#x27;: 123456, &#x27;confirm&#x27;: 123456, &#x27;name&#x27;: &#x27;测试07&#x27;}发送给接口地址http://192.168.1.133:80/exam/signup/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] signup_02:测试重复注册==比对响应结果通过 [send.py:38]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] signup_02:测试重复注册==落库检查通过 [db.py:48]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>signup_04:测试账号为空</td>
+          <td class="col-name">testcase/test_signup.py::test_signup[signup_04-测试账号为空-/exam/signup/-post-args3-expect3-select count(*) from user where username=&apos;&apos; and password=&apos;123456&apos; and name=&apos;测试00&apos;-0]</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;signup.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;&#x27;, &#x27;password&#x27;: 123456, &#x27;confirm&#x27;: 123456, &#x27;name&#x27;: &#x27;测试00&#x27;}发送给接口地址http://192.168.1.133:80/exam/signup/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] signup_04:测试账号为空==比对响应结果通过 [send.py:38]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] signup_04:测试账号为空==落库检查通过 [db.py:48]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>signup_05:测试密码为空</td>
+          <td class="col-name">testcase/test_signup.py::test_signup[signup_05-测试密码为空-/exam/signup/-post-args4-expect4-select count(*) from user where username=&apos;test09&apos; and password=&apos;&apos; and name=&apos;测试09&apos;-0]</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;signup.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;test09&#x27;, &#x27;password&#x27;: &#x27;&#x27;, &#x27;confirm&#x27;: 123456, &#x27;name&#x27;: &#x27;测试09&#x27;}发送给接口地址http://192.168.1.133:80/exam/signup/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] signup_05:测试密码为空==比对响应结果通过 [send.py:38]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] signup_05:测试密码为空==落库检查通过 [db.py:48]<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td>signup_07:测试参数均为空</td>
+          <td class="col-name">testcase/test_signup.py::test_signup[signup_07-测试参数均为空-/exam/signup/-post-args6-expect6-select count(*) from user where username=&apos;&apos; and password=&apos;&apos; and name=&apos;测试00&apos;-0]</td>
+          <td class="col-duration">0.05</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] 读sql语句文件(&#x27;signup.sql&#x27;,)成功 [db.py:15]
+2021-08-29 17:51:22 [INFO] 执行造数代码，初始化数据库成功 [db.py:38]<br/> -------------------------------Captured log call-------------------------------- <br/>2021-08-29 17:51:22 [INFO] 使用post将参数{&#x27;username&#x27;: &#x27;&#x27;, &#x27;password&#x27;: &#x27;&#x27;, &#x27;confirm&#x27;: &#x27;&#x27;, &#x27;name&#x27;: &#x27;测试00&#x27;}发送给接口地址http://192.168.1.133:80/exam/signup/成功 [send.py:19]
+2021-08-29 17:51:22 [INFO] signup_07:测试参数均为空==比对响应结果通过 [send.py:38]
+2021-08-29 17:51:22 [INFO] 读入口配置文件../conf/entry.ini成功==接口服务器入口名：formal，数据库服务器入口名：formal [conf.py:14]
+2021-08-29 17:51:22 [INFO] 读接口服务器配置文件../conf/server.conf成功==接口服务器地址：http://192.168.1.133:80 [conf.py:26]
+2021-08-29 17:51:22 [INFO] 读数据库服务器配置文件../conf/db.conf成功==数据库信息：{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;} [conf.py:40]
+2021-08-29 17:51:22 [INFO] 连接数据库{&#x27;host&#x27;: &#x27;192.168.1.133&#x27;, &#x27;db&#x27;: &#x27;exam&#x27;, &#x27;user&#x27;: &#x27;root&#x27;, &#x27;passwd&#x27;: &#x27;123456&#x27;}成功 [db.py:26]
+2021-08-29 17:51:22 [INFO] signup_07:测试参数均为空==落库检查通过 [db.py:48]<br/></div></td></tr></tbody></table></body></html>
