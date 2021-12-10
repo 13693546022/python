@@ -67,9 +67,10 @@ class Conf:
                         self.__init__()
                     else:log().warning('服务器入口名未发生变更')
             else :
-                log().info('取消修改入口名')
+                log().warning('取消修改入口名')
         except BaseException as e:
             log().error(f'修改服务器入口名出错==错误类型：{type(e).__name__}，错误内容：{e}')
+            exit()
 if __name__ == '__main__':
     a=Conf()
     a.update_entry()
