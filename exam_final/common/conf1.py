@@ -46,28 +46,28 @@ class Conf:
         try:
             is_update=input('是否输入入口名（y/n）：')
             while is_update not in {'y','Y','n','N'}:
-                log().info('输入错误，请重新输入（y/n）:')
-                if is_update in {'y','Y'}:
-                    new_server=input('请输入接口服务器入口名：')
-                    new_db=input('请输入数据库服务器入口名：')
-                    while {new_server, new_db}.issubset({'debug','formal'})==False:
-                        log().info('服务器入口名输入错误，请重新输入（debug、formal）：')
-                        if {new_server,new_db}.issubset({'debug','formal'}):
-                            old_server=self.__which_server
-                            old_db=self.__which_db
-                            if new_server != old_server and new_db != old_db:
-                                conf=configparser.ConfigParser()
-                                conf.read('../conf/entry.ini')
-                                conf.set('entry','which_server',new_server)
-                                conf.set('entry','which_db',new_db)
-                                file=open('../conf/entry.ini','w')
-                                conf.write(file)
-                                file.close()
-                                log().info(f'成功将服务器入口名{old_server}，{old_db}修改未{new_server}，{new_db}')
-                                self.__init__()
-                            else:log().warning('服务器入口名未发生变更')
-                else :
-                    log().info('取消修改入口名')
+                is_update=input('输入错误，请重新输入（y/n）:')
+            if is_update in {'y','Y'}:
+                new_server=input('请输入接口服务器入口名（debug、formal）：')
+                new_db=input('请输入数据库服务器入口名（debug、formal）：')
+                while {new_server, new_db}.issubset({'debug','formal'})==False:
+                    new_server=input('服务器入口名输入错误，请重新输入接口服务器入口名（debug、formal）：')
+                    new_db=input('服务器入口名输入错误，请重新输入数据库服务器入口名（debug、formal）：')
+                if {new_server, new_db}.issubset({'debug', 'formal'}):
+                    old_server, old_db = self.__which_server, self.__which_db
+                    if new_server != old_server and new_db != old_db:
+                        conf=configparser.ConfigParser()
+                        conf.read('../conf/entry.ini')
+                        conf.set('entry','which_server',new_server)
+                        conf.set('entry','which_db',new_db)
+                        file=open('../conf/entry.ini','w')
+                        conf.write(file)
+                        file.close()
+                        log().info(f'成功将服务器入口名{old_server}，{old_db}修改未{new_server}，{new_db}')
+                        self.__init__()
+                    else:log().warning('服务器入口名未发生变更')
+            else :
+                log().info('取消修改入口名')
         except BaseException as e:
             log().error(f'修改服务器入口名出错==错误类型：{type(e).__name__}，错误内容：{e}')
 if __name__ == '__main__':
