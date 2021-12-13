@@ -28,6 +28,7 @@ def read_case(xlsfile, prefixs, dict_indexs, columns=None, col_type=None): # 把
         return cases
     except BaseException as e:
         log().error(f'读测试用例文件{xlsfile}出错==错误类型：{type(e).__name__}，错误内容：{e}')
+        exit()
 # 读带{:}参数的用例
 def read_dict_case(xlsfile,columns=None): # excel文件名，columns用于存储列名，处理好{:}的数据为字典，返回用例列表
     xlsfile='../excelcase/'+xlsfile
@@ -43,6 +44,7 @@ def read_dict_case(xlsfile,columns=None): # excel文件名，columns用于存储
         return cases
     except BaseException as e:
         log().error(f'读测试用例文件{xlsfile}出错==错误类型：{type(e).__name__}，错误内容：{e}')
+        exit()
 
 if __name__=='__main__':
     # read_case('login.xlsx','arg_',4,col_type={'arg_password':str})
